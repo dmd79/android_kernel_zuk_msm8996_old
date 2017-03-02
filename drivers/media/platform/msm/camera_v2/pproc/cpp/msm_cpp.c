@@ -115,12 +115,6 @@ static  int msm_cpp_update_gdscr_status(struct cpp_device *cpp_dev,
 	bool status);
 static int msm_cpp_buffer_private_ops(struct cpp_device *cpp_dev,
 	uint32_t buff_mgr_ops, uint32_t id, void *arg);
-static void msm_cpp_set_micro_irq_mask(struct cpp_device *cpp_dev,
-	uint8_t enable, uint32_t irq_mask);
-static void msm_cpp_flush_queue_and_release_buffer(struct cpp_device *cpp_dev,
-	int queue_len);
-static int msm_cpp_dump_frame_cmd(struct msm_cpp_frame_info_t *frame_info);
-static int32_t msm_cpp_reset_vbif_and_load_fw(struct cpp_device *cpp_dev);
 
 #if CONFIG_MSM_CPP_DBG
 #define CPP_DBG(fmt, args...) pr_err(fmt, ##args)
@@ -177,7 +171,7 @@ void msm_cpp_vbif_register_error_handler(void *dev,
 	int (*client_vbif_error_handler)(void *, uint32_t))
 {
 	if (dev == NULL || client >= VBIF_CLIENT_MAX) {
-		pr_err("%s: Fail to register handler! dev = %pK,client %d\n",
+		pr_err("%s: Fail to register handler! dev = %p, client %d\n",
 			__func__, dev, client);
 		return;
 	}
@@ -889,16 +883,11 @@ static int cpp_init_hardware(struct cpp_device *cpp_dev)
 	if (cpp_dev->fw_name_bin) {
 		msm_camera_enable_irq(cpp_dev->irq, false);
 		rc = cpp_load_fw(cpp_dev, cpp_dev->fw_name_bin);
-		if (rc < 0) {
-			pr_err("%s: load firmware failure %d-retry\n",
-				__func__, rc);
-			rc = msm_cpp_reset_vbif_and_load_fw(cpp_dev);
-			if (rc < 0) {
-				msm_camera_enable_irq(cpp_dev->irq, true);
-				goto pwr_collapse_reset;
-			}
-		}
 		msm_camera_enable_irq(cpp_dev->irq, true);
+		if (rc < 0) {
+			pr_err("%s: load firmware failure %d\n", __func__, rc);
+			goto pwr_collapse_reset;
+		}
 		msm_camera_io_w_mb(0x7C8, cpp_dev->base +
 			MSM_CPP_MICRO_IRQGEN_MASK);
 		msm_camera_io_w_mb(0xFFFF, cpp_dev->base +
@@ -910,7 +899,6 @@ static int cpp_init_hardware(struct cpp_device *cpp_dev)
 
 pwr_collapse_reset:
 	msm_cpp_update_gdscr_status(cpp_dev, false);
-	msm_camera_unregister_irq(cpp_dev->pdev, cpp_dev->irq, cpp_dev);
 req_irq_fail:
 	msm_camera_clk_enable(&cpp_dev->pdev->dev, cpp_dev->clk_info,
 		cpp_dev->cpp_clk, cpp_dev->num_clks, false);
@@ -1075,40 +1063,12 @@ end:
 	return rc;
 }
 
-int32_t msm_cpp_reset_vbif_clients(struct cpp_device *cpp_dev)
-{
-	uint32_t i;
-
-	pr_warn("%s: handle vbif hang...\n", __func__);
-	for (i = 0; i < VBIF_CLIENT_MAX; i++) {
-		if (cpp_dev->vbif_data->err_handler[i] == NULL)
-			continue;
-
-		cpp_dev->vbif_data->err_handler[i](
-			cpp_dev->vbif_data->dev[i], CPP_VBIF_ERROR_HANG);
-	}
-	return 0;
-}
-
-int32_t msm_cpp_reset_vbif_and_load_fw(struct cpp_device *cpp_dev)
-{
-	int32_t rc = 0;
-
-	msm_cpp_reset_vbif_clients(cpp_dev);
-
-	rc = cpp_load_fw(cpp_dev, cpp_dev->fw_name_bin);
-	if (rc < 0)
-		pr_err("Reset and load fw failed %d\n", rc);
-
-	return rc;
-}
-
 int cpp_vbif_error_handler(void *dev, uint32_t vbif_error)
 {
 	struct cpp_device *cpp_dev = NULL;
 
 	if (dev == NULL || vbif_error >= CPP_VBIF_ERROR_MAX) {
-		pr_err("failed: dev %pK,vbif error %d\n", dev, vbif_error);
+		pr_err("failed: dev %p, vbif error %d\n", dev, vbif_error);
 		return -EINVAL;
 	}
 
@@ -1168,10 +1128,6 @@ static int cpp_open_node(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
 
 	CPP_DBG("open %d %pK\n", i, &fh->vfh);
 	cpp_dev->cpp_open_cnt++;
-
-	msm_cpp_vbif_register_error_handler(cpp_dev,
-		VBIF_CLIENT_CPP, cpp_vbif_error_handler);
-
 	if (cpp_dev->cpp_open_cnt == 1) {
 		rc = cpp_init_hardware(cpp_dev);
 		if (rc < 0) {
@@ -1193,6 +1149,9 @@ static int cpp_open_node(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
 		}
 		cpp_dev->state = CPP_STATE_IDLE;
 	}
+
+	msm_cpp_vbif_register_error_handler(cpp_dev,
+		VBIF_CLIENT_CPP, cpp_vbif_error_handler);
 
 	mutex_unlock(&cpp_dev->mutex);
 	return 0;
@@ -1372,6 +1331,11 @@ static int msm_cpp_notify_frame_done(struct cpp_device *cpp_dev,
 			buff_mgr_info.stream_id = (iden & 0xFFFF);
 			buff_mgr_info.frame_id = processed_frame->frame_id;
 			buff_mgr_info.timestamp = processed_frame->timestamp;
+			/*
+			 * Update the reserved field (cds information) to buffer
+			 * manager structure so it is propogated back to HAL
+			 */
+			buff_mgr_info.reserved = processed_frame->reserved;
 			if (processed_frame->batch_info.batch_mode ==
 				BATCH_MODE_VIDEO ||
 				(IS_BATCH_BUFFER_ON_PREVIEW(
@@ -1419,6 +1383,11 @@ static int msm_cpp_notify_frame_done(struct cpp_device *cpp_dev,
 			buff_mgr_info.timestamp = processed_frame->timestamp;
 			buff_mgr_info.index =
 				processed_frame->duplicate_buffer_info.index;
+			/*
+			 * Update the reserved field (cds information) to buffer
+			 * manager structure so it is propogated back to HAL
+			 */
+			buff_mgr_info.reserved = processed_frame->reserved;
 			if (put_buf) {
 				rc = msm_cpp_buffer_ops(cpp_dev,
 					VIDIOC_MSM_BUF_MNGR_PUT_BUF,
@@ -1542,16 +1511,21 @@ static void msm_cpp_do_timeout_work(struct work_struct *work)
 		goto end;
 	}
 
+	pr_err("%s: handle vbif hang...\n", __func__);
+	for (i = 0; i < VBIF_CLIENT_MAX; i++) {
+		if (cpp_dev->vbif_data->err_handler[i] == NULL)
+			continue;
+
+		cpp_dev->vbif_data->err_handler[i](
+			cpp_dev->vbif_data->dev[i], CPP_VBIF_ERROR_HANG);
+	}
+
 	pr_debug("Reloading firmware %d\n", queue_len);
 	rc = cpp_load_fw(cpp_timer.data.cpp_dev,
 		cpp_timer.data.cpp_dev->fw_name_bin);
 	if (rc) {
-		pr_warn("Firmware loading failed-retry\n");
-		rc = msm_cpp_reset_vbif_and_load_fw(cpp_dev);
-		if (rc < 0) {
-			pr_err("Firmware loading failed\n");
-			goto error;
-		}
+		pr_warn("Firmware loading failed\n");
+		goto error;
 	} else {
 		pr_debug("Firmware loading done\n");
 	}
@@ -1572,17 +1546,6 @@ static void msm_cpp_do_timeout_work(struct work_struct *work)
 		goto end;
 	}
 
-	for (i = 0; i < queue_len; i++) {
-		processed_frame[i] = cpp_timer.data.processed_frame[i];
-		if (!processed_frame[i]) {
-			pr_warn("process frame null , queue len %d", queue_len);
-			msm_cpp_flush_queue_and_release_buffer(cpp_dev,
-				queue_len);
-			msm_cpp_set_micro_irq_mask(cpp_dev, 1, 0x8);
-			goto end;
-		}
-	}
-
 	atomic_set(&cpp_timer.used, 1);
 	pr_warn("Starting timer to fire in %d ms. (jiffies=%lu)\n",
 		CPP_CMD_TIMEOUT_MS, jiffies);
@@ -1590,6 +1553,9 @@ static void msm_cpp_do_timeout_work(struct work_struct *work)
 		jiffies + msecs_to_jiffies(CPP_CMD_TIMEOUT_MS));
 
 	msm_cpp_set_micro_irq_mask(cpp_dev, 1, 0x8);
+
+	for (i = 0; i < MAX_CPP_PROCESSING_FRAME; i++)
+		processed_frame[i] = cpp_timer.data.processed_frame[i];
 
 	for (i = 0; i < queue_len; i++) {
 		pr_warn("Rescheduling for identity=0x%x, frame_id=%03d\n",
@@ -1909,8 +1875,6 @@ static int msm_cpp_check_buf_type(struct msm_buf_mngr_info *buff_mgr_info,
 			/* More or equal bufs as Input buffer */
 			num_output_bufs = new_frame->batch_info.batch_size;
 		}
-		if (num_output_bufs > MSM_OUTPUT_BUF_CNT)
-			return 0;
 		for (i = 0; i < num_output_bufs; i++) {
 			new_frame->output_buffer_info[i].index =
 				buff_mgr_info->user_buf.buf_idx[i];
@@ -2729,14 +2693,14 @@ static int msm_cpp_validate_input(unsigned int cmd, void *arg,
 		break;
 	default: {
 		if (ioctl_ptr == NULL) {
-			pr_err("Wrong ioctl_ptr for cmd %u\n", cmd);
+			pr_err("Wrong ioctl_ptr %pK\n", ioctl_ptr);
 			return -EINVAL;
 		}
 
 		*ioctl_ptr = arg;
 		if ((*ioctl_ptr == NULL) ||
-			(*ioctl_ptr)->ioctl_ptr == NULL) {
-			pr_err("Error invalid ioctl argument cmd %u", cmd);
+			((*ioctl_ptr)->ioctl_ptr == NULL)) {
+			pr_err("Wrong arg %pK\n", arg);
 			return -EINVAL;
 		}
 		break;
@@ -2761,12 +2725,6 @@ long msm_cpp_subdev_ioctl(struct v4l2_subdev *sd,
 		pr_err("cpp_dev is null\n");
 		return -EINVAL;
 	}
-
-	if (_IOC_DIR(cmd) == _IOC_NONE) {
-		pr_err("Invalid ioctl/subdev cmd %u", cmd);
-		return -EINVAL;
-	}
-
 	rc = msm_cpp_validate_input(cmd, arg, &ioctl_ptr);
 	if (rc != 0) {
 		pr_err("input validation failed\n");
@@ -2847,14 +2805,11 @@ long msm_cpp_subdev_ioctl(struct v4l2_subdev *sd,
 			msm_camera_enable_irq(cpp_dev->irq, false);
 			rc = cpp_load_fw(cpp_dev, cpp_dev->fw_name_bin);
 			if (rc < 0) {
-				pr_err("%s: load firmware failure %d-retry\n",
+				pr_err("%s: load firmware failure %d\n",
 					__func__, rc);
-				rc = msm_cpp_reset_vbif_and_load_fw(cpp_dev);
-				if (rc < 0) {
-					enable_irq(cpp_dev->irq->start);
-					mutex_unlock(&cpp_dev->mutex);
-					return rc;
-				}
+				enable_irq(cpp_dev->irq->start);
+				mutex_unlock(&cpp_dev->mutex);
+				return rc;
 			}
 			rc = msm_cpp_fw_version(cpp_dev);
 			if (rc < 0) {
@@ -3451,6 +3406,7 @@ static struct msm_cpp_frame_info_t *get_64bit_cpp_frame_from_compat(
 	new_frame->we_disable = new_frame32->we_disable;
 	new_frame->duplicate_identity = new_frame32->duplicate_identity;
 	new_frame->feature_mask = new_frame32->feature_mask;
+	new_frame->reserved = new_frame32->reserved;
 	new_frame->partial_frame_indicator =
 		new_frame32->partial_frame_indicator;
 	new_frame->first_payload = new_frame32->first_payload;
@@ -3550,6 +3506,7 @@ static void get_compat_frame_from_64bit(struct msm_cpp_frame_info_t *frame,
 	k32_frame->we_disable = frame->we_disable;
 	k32_frame->duplicate_identity = frame->duplicate_identity;
 	k32_frame->feature_mask = frame->feature_mask;
+	k32_frame->reserved = frame->reserved;
 	k32_frame->cookie = ptr_to_compat(frame->cookie);
 	k32_frame->partial_frame_indicator = frame->partial_frame_indicator;
 	k32_frame->first_payload = frame->first_payload;
@@ -3853,6 +3810,13 @@ static long msm_cpp_subdev_fops_compat_ioctl(struct file *file,
 		get_user(k_queue_buf.buff_mgr_info.timestamp.tv_usec,
 			&u32_queue_buf->buff_mgr_info.timestamp.tv_usec);
 
+		/*
+		 * Update the reserved field (cds information) to buffer
+		 * manager structure so that it is propogated back to HAL
+		 */
+		get_user(k_queue_buf.buff_mgr_info.reserved,
+			&u32_queue_buf->buff_mgr_info.reserved);
+
 		kp_ioctl.ioctl_ptr = (void *)&k_queue_buf;
 		kp_ioctl.len = sizeof(struct msm_pproc_queue_buf_info);
 		is_copytouser_req = false;
@@ -4148,7 +4112,7 @@ static int cpp_probe(struct platform_device *pdev)
 	if (cpp_dev->bus_master_flag)
 		rc = msm_cpp_init_bandwidth_mgr(cpp_dev);
 	else
-		rc = msm_isp_init_bandwidth_mgr(NULL, ISP_CPP);
+		rc = msm_isp_init_bandwidth_mgr(ISP_CPP);
 	if (rc < 0) {
 		pr_err("%s: Bandwidth registration Failed!\n", __func__);
 		goto cpp_probe_init_error;

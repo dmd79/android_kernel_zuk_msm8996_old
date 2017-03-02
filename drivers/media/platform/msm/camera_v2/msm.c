@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2016, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2015, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -35,8 +35,6 @@
 
 static struct v4l2_device *msm_v4l2_dev;
 static struct list_head    ordered_sd_list;
-
-static struct pm_qos_request msm_v4l2_pm_qos_request;
 
 static struct msm_queue_head *msm_session_q;
 
@@ -215,24 +213,6 @@ static inline int __msm_queue_find_command_ack_q(void *d1, void *d2)
 	return (ack->stream_id == *(unsigned int *)d2) ? 1 : 0;
 }
 
-static void msm_pm_qos_add_request(void)
-{
-	pr_info("%s: add request", __func__);
-	pm_qos_add_request(&msm_v4l2_pm_qos_request, PM_QOS_CPU_DMA_LATENCY,
-	PM_QOS_DEFAULT_VALUE);
-}
-
-static void msm_pm_qos_remove_request(void)
-{
-	pr_info("%s: remove request", __func__);
-	pm_qos_remove_request(&msm_v4l2_pm_qos_request);
-}
-
-void msm_pm_qos_update_request(int val)
-{
-	pr_info("%s: update request %d", __func__, val);
-	pm_qos_update_request(&msm_v4l2_pm_qos_request, val);
-}
 
 struct msm_session *msm_session_find(unsigned int session_id)
 {
@@ -644,37 +624,6 @@ static int __msm_close_destry_session_notify_apps(void *d1, void *d2)
 	return 0;
 }
 
-static int __msm_wakeup_all_cmdack_session_stream(void *d1, void *d2)
-{
-	struct msm_stream *stream = d1;
-	struct msm_session *session = d2;
-	struct msm_command_ack *cmd_ack = NULL;
-	unsigned long spin_flags = 0;
-
-	cmd_ack = msm_queue_find(&session->command_ack_q,
-		struct msm_command_ack, list,
-		__msm_queue_find_command_ack_q,
-		&stream->stream_id);
-	if (cmd_ack) {
-		spin_lock_irqsave(&(session->command_ack_q.lock),
-			spin_flags);
-		complete(&cmd_ack->wait_complete);
-		spin_unlock_irqrestore(&(session->command_ack_q.lock),
-			spin_flags);
-	}
-	return 0;
-}
-
-static int __msm_close_wakeup_all_cmdack_session(void *d1, void *d2)
-{
-	struct msm_stream  *stream = NULL;
-	struct msm_session *session = d1;
-
-	stream = msm_queue_find(&session->stream_q, struct msm_stream,
-		list, __msm_wakeup_all_cmdack_session_stream, d1);
-	return 0;
-}
-
 static long msm_private_ioctl(struct file *file, void *fh,
 	bool valid_prio, unsigned int cmd, void *arg)
 {
@@ -692,7 +641,6 @@ static long msm_private_ioctl(struct file *file, void *fh,
 		return 0;
 	}
 
-	memset(&event, 0, sizeof(struct v4l2_event));
 	session_id = event_data->session_id;
 	stream_id = event_data->stream_id;
 
@@ -953,15 +901,9 @@ static int msm_close(struct file *filep)
 		list_for_each_entry(msm_sd, &ordered_sd_list, list)
 			__msm_sd_close_subdevs(msm_sd, &sd_close);
 
-	/* remove msm_v4l2_pm_qos_request */
-	msm_pm_qos_remove_request();
-
 	/* send v4l2_event to HAL next*/
 	msm_queue_traverse_action(msm_session_q, struct msm_session, list,
 		__msm_close_destry_session_notify_apps, NULL);
-
-	msm_queue_traverse_action(msm_session_q, struct msm_session, list,
-		__msm_close_wakeup_all_cmdack_session, NULL);
 
 	spin_lock_irqsave(&msm_eventq_lock, flags);
 	msm_eventq = NULL;
@@ -1014,9 +956,6 @@ static int msm_open(struct file *filep)
 	spin_lock_irqsave(&msm_eventq_lock, flags);
 	msm_eventq = filep->private_data;
 	spin_unlock_irqrestore(&msm_eventq_lock, flags);
-
-	/* register msm_v4l2_pm_qos_request */
-	msm_pm_qos_add_request();
 
 	return rc;
 }
@@ -1104,21 +1043,17 @@ long msm_copy_camera_private_ioctl_args(unsigned long arg,
 	struct msm_camera_private_ioctl_arg *k_ioctl,
 	void __user **tmp_compat_ioctl_ptr)
 {
-	struct msm_camera_private_ioctl_arg up_ioctl;
+	struct msm_camera_private_ioctl_arg *up_ioctl_ptr =
+		(struct msm_camera_private_ioctl_arg *)arg;
 
 	if (WARN_ON(!arg || !k_ioctl || !tmp_compat_ioctl_ptr))
 		return -EIO;
 
-	if (copy_from_user(&up_ioctl,
-		(struct msm_camera_private_ioctl_arg *)arg,
-		sizeof(struct msm_camera_private_ioctl_arg)))
-		return -EFAULT;
-
-	k_ioctl->id = up_ioctl.id;
-	k_ioctl->size = up_ioctl.size;
-	k_ioctl->result = up_ioctl.result;
-	k_ioctl->reserved = up_ioctl.reserved;
-	*tmp_compat_ioctl_ptr = compat_ptr(up_ioctl.ioctl_ptr);
+	k_ioctl->id = up_ioctl_ptr->id;
+	k_ioctl->size = up_ioctl_ptr->size;
+	k_ioctl->result = up_ioctl_ptr->result;
+	k_ioctl->reserved = up_ioctl_ptr->reserved;
+	*tmp_compat_ioctl_ptr = compat_ptr(up_ioctl_ptr->ioctl_ptr);
 
 	return 0;
 }
