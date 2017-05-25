@@ -890,7 +890,7 @@ out:
 					&desc->attrs);
 			priv->region = NULL;
 		}
-		if (desc->clear_fw_region && priv->region_start)
+		if (desc->clear_fw_region)
 			pil_clear_segment(desc);
 		pil_release_mmap(desc);
 	}
