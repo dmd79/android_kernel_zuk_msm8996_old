@@ -811,9 +811,9 @@
 	status = "disabled";
 };
 
-&spi_12 {
+/*&spi_12 {
 	status = "ok";
-};
+};*/
 
 &slim_msm {
 	tasha_codec {

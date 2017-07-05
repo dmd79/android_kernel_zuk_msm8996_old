@@ -27,6 +27,7 @@ enum {
 
 struct device;
 struct module;
+extern char restart_workaround[19u];
 
 /**
  * struct subsys_desc - subsystem descriptor

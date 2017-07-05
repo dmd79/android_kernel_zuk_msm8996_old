@@ -1044,6 +1044,14 @@ int subsystem_restart_dev(struct subsys_device *dev)
 		return 0;
 	}
 
+//niuli optimize psensor 20161226
+        if(!strcmp(restart_workaround,"PSENSOR-workaround")&&!strcmp(name,"slpi")){
+             dev->restart_level = 1;//relative
+             pr_info("PSENSOR-workaround change slpi restart_level to relative \n");
+        }else{
+             pr_info("normal restart_workaround =%s \n",restart_workaround);
+        }
+
 	switch (dev->restart_level) {
 
 	case RESET_SUBSYS_COUPLED:

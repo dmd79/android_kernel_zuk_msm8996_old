@@ -21,6 +21,9 @@
 #include <linux/interrupt.h>
 #include <linux/of_gpio.h>
 #include <linux/delay.h>
+#include <linux/ktime.h>
+#include <linux/timekeeping.h>
+
 
 #include <linux/msm-bus-board.h>
 #include <linux/msm-bus.h>
@@ -52,6 +55,16 @@
 
 #define desc_to_data(d) container_of(d, struct pil_tz_data, desc)
 #define subsys_to_data(d) container_of(d, struct pil_tz_data, subsys_desc)
+
+//niuli optimize psensor 20161226
+static ktime_t fail_current_time;
+static struct timespec fail_current_timespec,fail_last_timespec;
+unsigned long flag_reset = false;  //reset imedearly
+unsigned long flag_need_reset = false;  //reset after at leaset 5s to avoid crash
+unsigned long flag_no_need_reset = false;  //reset 5 times in 25s sensor rearlly error
+char restart_workaround[19u];
+long fatal_time[5u];
+static long flag_fatal_count = 0;
 
 /**
  * struct reg_info - regulator info
@@ -116,7 +129,22 @@ struct pil_tz_data {
 	void __iomem *irq_mask;
 	void __iomem *err_status;
 	u32 bits_arr[8];
+struct work_struct subsystem_work;
 };
+
+//niuli optimize psensor 20161226
+static void subsystem_work_handle(struct work_struct *work){
+	struct pil_tz_data *d =
+	    container_of(work, struct pil_tz_data, subsystem_work);
+    msleep(5*1000);
+
+	if(flag_need_reset){
+		flag_need_reset = false;
+        subsystem_restart_dev(d->subsys);
+	}
+
+}
+
 
 enum scm_cmd {
 	PAS_INIT_IMAGE_CMD = 1,
@@ -781,11 +809,45 @@ static struct pil_reset_ops pil_ops_trusted = {
 	.proxy_unvote = pil_remove_proxy_vote,
 };
 
+//niuli optimize psensor 20161226
+static void fatal_flag_decide(void){
+	fail_current_time = ktime_get_boottime();
+	fail_current_timespec = ktime_to_timespec(fail_current_time);
+	pr_err("fail_current_timespec.tv_sec=%ld fail_last_timespec.tv_sec=%ld\n",
+		fail_current_timespec.tv_sec,fail_last_timespec.tv_sec);
+
+        if(flag_fatal_count>4){
+            if(fail_current_timespec.tv_sec - fatal_time[flag_fatal_count%5 ] < 25 ){
+                pr_err("p-sensor fatal happen 5 times in 25s invalid ssc \n");
+                flag_no_need_reset = true;
+                return;
+             }
+
+        }
+
+        fatal_time[flag_fatal_count%5] = fail_current_timespec.tv_sec;
+        pr_err("p-sensor fatal flag_fatal_count=%ld :: %ldr\n",flag_fatal_count,flag_fatal_count%5);
+        flag_fatal_count++;
+
+fail_last_timespec.tv_sec = fail_current_timespec.tv_sec;
+	if((fail_current_timespec.tv_sec- fail_last_timespec.tv_sec)>6)
+	{
+            flag_reset = true;
+
+	}else{
+	    flag_need_reset = true;
+	}
+
+}
+
 static void log_failure_reason(const struct pil_tz_data *d)
 {
 	u32 size;
 	char *smem_reason, reason[MAX_SSR_REASON_LEN];
 	const char *name = d->subsys_desc.name;
+	char filter_reason[26];
+	char *real_reason;
+	char *workaround = "PSENSOR-workaround";
 
 	if (d->smem_id == -1)
 		return;
@@ -801,6 +863,27 @@ static void log_failure_reason(const struct pil_tz_data *d)
 		pr_err("%s SFR: (unknown, empty string found).\n", name);
 		return;
 	}
+
+//niuli optimize psensor 20161226
+	strlcpy(filter_reason, smem_reason, 27u);
+
+
+	real_reason = strstr(filter_reason,workaround);
+
+	pr_err("filter_reason =%s len=%u real_reason=%s\n",filter_reason,(unsigned int)strlen(workaround),real_reason);
+    if(real_reason != NULL){
+         strlcpy(restart_workaround,real_reason,19u);
+	}else{
+		 strlcpy(restart_workaround,"slpi-normal-crash.",strlen("slpi-normal-crash."));
+	}
+
+	pr_err("restart_workaround=%s\n",restart_workaround);
+
+	if(!strcmp(restart_workaround,workaround)&& !strcmp(name,"slpi")){
+        fatal_flag_decide();
+
+        }
+
 
 	strlcpy(reason, smem_reason, min(size, MAX_SSR_REASON_LEN));
 	pr_err("%s subsystem failure reason: %s.\n", name, reason);
@@ -874,6 +957,7 @@ static void subsys_crash_shutdown(const struct subsys_desc *subsys)
 static irqreturn_t subsys_err_fatal_intr_handler (int irq, void *dev_id)
 {
 	struct pil_tz_data *d = subsys_to_data(dev_id);
+	char *workaround = "PSENSOR-workaround";
 
 	pr_err("Fatal error on %s!\n", d->subsys_desc.name);
 	if (subsys_get_crash_status(d->subsys)) {
@@ -883,7 +967,31 @@ static irqreturn_t subsys_err_fatal_intr_handler (int irq, void *dev_id)
 	}
 	subsys_set_crash_status(d->subsys, true);
 	log_failure_reason(d);
+//niuli optimize psensor 20161226
+	if(!strcmp(d->subsys_desc.name,"slpi")&&!strcmp(restart_workaround,workaround) ){
+                if(true == flag_no_need_reset){
+		        subsys_set_crash_status(d->subsys, false);
+		        pr_err("%s: Ignoring error fatal, no need restart in progress\n",
+								d->subsys_desc.name);
+
+			        return IRQ_HANDLED;
+                }else{
+	               if(true == flag_reset){
+				pr_err("%s:slpi fatal last 10min \n",d->subsys_desc.name);
+				subsystem_restart_dev(d->subsys);
+				flag_reset = false;
+			}else if(true == flag_need_reset){
+				subsys_set_crash_status(d->subsys, false);
+				pr_err("%s: Ignoring error fatal, restart in progress\n",
+								d->subsys_desc.name);
+
+				schedule_work(&d->subsystem_work);
+			        return IRQ_HANDLED;
+			}
+                }
+	}else{
 	subsystem_restart_dev(d->subsys);
+	}
 
 	return IRQ_HANDLED;
 }
@@ -891,6 +999,7 @@ static irqreturn_t subsys_err_fatal_intr_handler (int irq, void *dev_id)
 static irqreturn_t subsys_wdog_bite_irq_handler(int irq, void *dev_id)
 {
 	struct pil_tz_data *d = subsys_to_data(dev_id);
+	char *workaround = "PSENSOR-workaround";
 
 	if (subsys_get_crash_status(d->subsys))
 		return IRQ_HANDLED;
@@ -902,7 +1011,31 @@ static irqreturn_t subsys_wdog_bite_irq_handler(int irq, void *dev_id)
 							__func__);
 	subsys_set_crash_status(d->subsys, true);
 	log_failure_reason(d);
+//niuli optimize psensor 20161226
+	if(!strcmp(d->subsys_desc.name,"slpi")&&!strcmp(restart_workaround,workaround) ){
+                if(true == flag_no_need_reset){
+                        subsys_set_crash_status(d->subsys, false);
+			pr_err("%s: Ignoring error fatal, no need restart in progress\n",
+								d->subsys_desc.name);
+
+			return IRQ_HANDLED;
+                }else{
+	               if(true == flag_reset){
+				pr_err("%s:slpi fatal last 10min \n",d->subsys_desc.name);
+				subsystem_restart_dev(d->subsys);
+				flag_reset = false;
+			}else if(true == flag_need_reset){
+				subsys_set_crash_status(d->subsys, false);
+				pr_err("%s: Ignoring error fatal, restart in progress\n",
+								d->subsys_desc.name);
+
+				schedule_work(&d->subsystem_work);
+			        return IRQ_HANDLED;
+			}
+                }
+	}else{
 	subsystem_restart_dev(d->subsys);
+	}
 
 	return IRQ_HANDLED;
 }
@@ -1066,6 +1199,8 @@ static int pil_tz_driver_probe(struct platform_device *pdev)
 		rc = -ENOMEM;
 		goto err_ramdump;
 	}
+
+    INIT_WORK(&d->subsystem_work,subsystem_work_handle);
 
 	d->subsys = subsys_register(&d->subsys_desc);
 	if (IS_ERR(d->subsys)) {

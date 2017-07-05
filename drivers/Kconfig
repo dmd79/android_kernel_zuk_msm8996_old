@@ -200,4 +200,5 @@ source "drivers/bif/Kconfig"
 
 source "drivers/gud/Kconfig"
 
+source "drivers/fingerprint/goodix/Kconfig"
 endmenu

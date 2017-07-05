@@ -96,6 +96,28 @@ KERNEL_MODULES_OUT := $(TARGET_OUT)/lib/modules
 
 TARGET_PREBUILT_KERNEL := $(TARGET_PREBUILT_INT_KERNEL)
 
+ifeq ($(TARGET_SUPPORT_EXFAT_AND_NTFS_FS), true)
+
+MODULE_SIGN_FILE := perl ./$(TARGET_KERNEL_SOURCE)/scripts/sign-file
+MODSECKEY := $(KERNEL_OUT)/signing_key.priv
+MODPUBKEY := $(KERNEL_OUT)/signing_key.x509
+
+define tuxera-module
+	@sh -c " \
+	  cp  device/fancymaker/common/tuxera/exfat/kernel-module/texfat.ko  $(TARGET_OUT)/lib/modules; \
+	  cp  device/fancymaker/common/tuxera/ntfs/kernel-module/tntfs.ko  $(TARGET_OUT)/lib/modules ; \
+	      KMOD_SIG_ALL=`cat $(KERNEL_OUT)/.config | grep CONFIG_MODULE_SIG_ALL | cut -d'=' -f2`; \
+	      KMOD_SIG_HASH=`cat $(KERNEL_OUT)/.config | grep CONFIG_MODULE_SIG_HASH | cut -d'=' -f2 | sed 's/\"//g'`; \
+	  if [ \"\$$KMOD_SIG_ALL\" = \"y\" ] && [ -n \"\$$KMOD_SIG_HASH\" ]; then \
+	      echo \"Signing kernel module: \" `basename $<`; \
+	      $(MODULE_SIGN_FILE) \$$KMOD_SIG_HASH $(MODSECKEY) $(MODPUBKEY) $(TARGET_OUT)/lib/modules/texfat.ko; \
+	      $(MODULE_SIGN_FILE) \$$KMOD_SIG_HASH $(MODSECKEY) $(MODPUBKEY) $(TARGET_OUT)/lib/modules/tntfs.ko; \
+	  fi; \
+	"
+endef
+
+endif
+
 define mv-modules
 mdpath=`find $(KERNEL_MODULES_OUT) -type f -name modules.dep`;\
 if [ "$$mdpath" != "" ];then\
@@ -137,6 +159,9 @@ $(TARGET_PREBUILT_INT_KERNEL): $(KERNEL_OUT) $(KERNEL_HEADERS_INSTALL)
 	$(MAKE) -C $(TARGET_KERNEL_SOURCE) O=$(BUILD_ROOT_LOC)$(KERNEL_OUT) ARCH=$(KERNEL_ARCH) CROSS_COMPILE=$(KERNEL_CROSS_COMPILE) $(KERNEL_CFLAGS) modules
 	$(MAKE) -C $(TARGET_KERNEL_SOURCE) O=$(BUILD_ROOT_LOC)$(KERNEL_OUT) INSTALL_MOD_PATH=$(BUILD_ROOT_LOC)../$(KERNEL_MODULES_INSTALL) INSTALL_MOD_STRIP=1 ARCH=$(KERNEL_ARCH) CROSS_COMPILE=$(KERNEL_CROSS_COMPILE) modules_install
 	$(mv-modules)
+ifeq ($(TARGET_SUPPORT_EXFAT_AND_NTFS_FS), true)
+	$(tuxera-module)
+endif
 	$(clean-module-folder)
 
 $(KERNEL_HEADERS_INSTALL): $(KERNEL_OUT)
