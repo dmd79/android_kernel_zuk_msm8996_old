@@ -90,7 +90,7 @@ module_param_named(max_pool_percent,
 			zswap_max_pool_percent, uint, 0644);
 
 /* Compressed storage to use */
-#define ZSWAP_ZPOOL_DEFAULT "zbud"
+#define ZSWAP_ZPOOL_DEFAULT "z3fold"
 static char *zswap_zpool_type = ZSWAP_ZPOOL_DEFAULT;
 module_param_named(zpool, zswap_zpool_type, charp, 0444);
 
