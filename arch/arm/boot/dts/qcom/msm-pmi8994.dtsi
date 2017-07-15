@@ -643,6 +643,7 @@
 				qcom,max-current = <12>;
 				qcom,default-state = "off";
 				qcom,id = <3>;
+				qcom,use-blink;
 			};
 
 			green_led: qcom,rgb_1 {
@@ -660,6 +661,7 @@
 				qcom,max-current = <12>;
 				qcom,default-state = "off";
 				qcom,id = <4>;
+				qcom,use-blink;
 			};
 
 			blue_led: qcom,rgb_2 {
@@ -677,6 +679,7 @@
 				qcom,max-current = <12>;
 				qcom,default-state = "off";
 				qcom,id = <5>;
+				qcom,use-blink;
 			};
 		};
 
