@@ -359,9 +359,9 @@ static ssize_t inst_info_read(struct file *file, char __user *buf,
 		cur += write_str(cur, end - cur, "capability: %s\n",
 			i == OUTPUT_PORT ? "Output" : "Capture");
 		cur += write_str(cur, end - cur, "name : %s\n",
-			inst->fmts[i]->name);
+			inst->fmts[i].name);
 		cur += write_str(cur, end - cur, "planes : %d\n",
-			inst->fmts[i]->num_planes);
+			inst->fmts[i].num_planes);
 		cur += write_str(cur, end - cur,
 			"type: %s\n", i == OUTPUT_PORT ?
 			"Output" : "Capture");
