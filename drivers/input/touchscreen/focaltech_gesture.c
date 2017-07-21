@@ -39,7 +39,7 @@
 /*******************************************************************************
 * Private constant and macro definitions using #define
 *******************************************************************************/
-#define  FTS_KEY_GESTURE_U		KEY_GESTURE_DT
+#define  FTS_KEY_GESTURE_U		KEY_POWER
 #define  FTS_KEY_GESTURE_UP		KEY_UP
 #define  FTS_KEY_GESTURE_DOWN		KEY_DOWN
 #define  FTS_KEY_GESTURE_LEFT		KEY_LEFT 
