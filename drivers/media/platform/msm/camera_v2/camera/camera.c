@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2016, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2017, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -485,6 +485,9 @@ static long camera_v4l2_vidioc_private_ioctl(struct file *filep, void *fh,
 	if (WARN_ON(!k_ioctl || !pvdev))
 		return -EIO;
 
+	if (cmd != VIDIOC_MSM_CAMERA_PRIVATE_IOCTL_CMD)
+		return -EINVAL;
+
 	switch (k_ioctl->id) {
 	case MSM_CAMERA_PRIV_IOCTL_ID_RETURN_BUF: {
 		struct msm_camera_return_buf ptr, *tmp = NULL;
@@ -640,6 +643,9 @@ static int camera_v4l2_open(struct file *filep)
 	if (!atomic_read(&pvdev->opened)) {
 		pm_stay_awake(&pvdev->vdev->dev);
 
+		/* Disable power collapse latency */
+		msm_pm_qos_update_request(CAMERA_DISABLE_PC_LATENCY);
+
 		/* create a new session when first opened */
 		rc = msm_create_session(pvdev->vdev->num, pvdev->vdev);
 		if (rc < 0) {
@@ -672,6 +678,8 @@ static int camera_v4l2_open(struct file *filep)
 			if (rc < 0)
 				goto post_fail;
 		}
+		/* Enable power collapse latency */
+		msm_pm_qos_update_request(CAMERA_ENABLE_PC_LATENCY);
 	} else {
 		rc = msm_create_command_ack_q(pvdev->vdev->num,
 			find_first_zero_bit((const unsigned long *)&opn_idx,
@@ -685,6 +693,7 @@ static int camera_v4l2_open(struct file *filep)
 	idx |= (1 << find_first_zero_bit((const unsigned long *)&opn_idx,
 				MSM_CAMERA_STREAM_CNT_BITS));
 	atomic_cmpxchg(&pvdev->opened, opn_idx, idx);
+
 	return rc;
 
 post_fail:
@@ -757,6 +766,7 @@ static int camera_v4l2_close(struct file *filep)
 		 * and application crashes */
 		camera_v4l2_vb2_q_release(filep);
 		msm_destroy_session(pvdev->vdev->num);
+
 		pm_relax(&pvdev->vdev->dev);
 	} else {
 		msm_delete_command_ack_q(pvdev->vdev->num,

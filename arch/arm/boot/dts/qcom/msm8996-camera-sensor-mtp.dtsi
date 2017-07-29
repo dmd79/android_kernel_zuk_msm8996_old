@@ -76,8 +76,7 @@
 		qcom,gpio-req-tbl-num = <0 1>;
 		qcom,gpio-req-tbl-flags = <1 0>;
 		qcom,gpio-req-tbl-label = "CAMIF_MCLK0", "CAM_RESET0";
-		qcom,clock-rates = <19200000 0>;
-			};
+	};
 #else
 	eeprom0: qcom,eeprom@0 {
 		cell-index = <0>;
@@ -136,7 +135,6 @@
 		clocks = <&clock_mmss clk_mclk2_clk_src>,
 			<&clock_mmss clk_camss_mclk2_clk>;
 		clock-names = "cam_src_clk", "cam_clk";
-		qcom,clock-rates = <19200000 0>;
 	};
 
 #if defined(CONFIG_PRODUCT_Z2_PLUS)
@@ -153,6 +151,8 @@
 		cam_vdig-supply = <&pm8994_l3>;
 		cam_vio-supply = <&pm8994_lvs1>;
 		cam_vana-supply = <&pm8994_l29>;
+		qcom,vdd-cx-supply = <&pm8994_s1_corner>;
+		qcom,vdd-cx-name = "qcom,vdd-cx";
 		qcom,cam-vreg-name = "cam_vdig", "cam_vio", "cam_vana";
 		qcom,cam-vreg-min-voltage = <1000000 0 2800000>;
 		qcom,cam-vreg-max-voltage = <1000000 0 2800000>;
@@ -175,7 +175,6 @@
 		clocks = <&clock_mmss clk_mclk0_clk_src>,
 				<&clock_mmss clk_camss_mclk0_clk>;
 		clock-names = "cam_src_clk", "cam_clk";
-		qcom,clock-rates = <24000000 0>;
 	};
 #elif defined(CONFIG_PRODUCT_Z2_ROW)
 	qcom,camera@0 {
@@ -191,7 +190,9 @@
 		qcom,eeprom-src = <&eeprom0>;
 		cam_vdig-supply = <&pm8994_s3>;
 		cam_vio-supply = <&pm8994_lvs1>;
-		cam_vana-supply = <&pm8994_l29>;
+        cam_vana-supply = <&pm8994_l29>;
+		qcom,vdd-cx-supply = <&pm8994_s1_corner>;
+		qcom,vdd-cx-name = "qcom,vdd-cx";
 		qcom,cam-vreg-name = "cam_vdig", "cam_vio", "cam_vana";
 		qcom,cam-vreg-min-voltage = <1300000 0 2800000>;
 		qcom,cam-vreg-max-voltage = <1300000 0 2800000>;
@@ -225,11 +226,13 @@
 		qcom,csid-sd-index = <0>;
 		qcom,mount-angle = <90>;
 		qcom,led-flash-src = <&led_flash0>;
-//		qcom,actuator-src = <&actuator0>;
-//		qcom,eeprom-src = <&eeprom0>;
+		qcom,actuator-src = <&actuator0>;
+		qcom,eeprom-src = <&eeprom0>;
 		cam_vdig-supply = <&pm8994_l3>;
 		cam_vio-supply = <&pm8994_lvs1>;
 		cam_vana-supply = <&pm8994_l29>;
+		qcom,vdd-cx-supply = <&pm8994_s1_corner>;
+		qcom,vdd-cx-name = "qcom,vdd-cx";
 		qcom,cam-vreg-name = "cam_vdig", "cam_vio", "cam_vana";
 		qcom,cam-vreg-min-voltage = <1000000 0 2800000>;
 		qcom,cam-vreg-max-voltage = <1000000 0 2800000>;
@@ -263,10 +266,12 @@
 		qcom,csiphy-sd-index = <2>;
 		qcom,csid-sd-index = <2>;
 		qcom,mount-angle = <270>;
-//		qcom,eeprom-src = <&eeprom1>;
+		qcom,eeprom-src = <&eeprom1>;
 		cam_vdig-supply = <&pm8994_l27>;
 		cam_vio-supply = <&pm8994_lvs1>;
 		cam_vana-supply = <&pm8994_l17>;
+		qcom,vdd-cx-supply = <&pm8994_s1_corner>;
+		qcom,vdd-cx-name = "qcom,vdd-cx";
 		qcom,cam-vreg-name = "cam_vdig", "cam_vio", "cam_vana";
 		qcom,cam-vreg-min-voltage = <1200000 0 2800000>;
 		qcom,cam-vreg-max-voltage = <1200000 0 2800000>;
@@ -298,7 +303,7 @@
 	qcom,camera@2 {
 		cell-index = <2>;
 		compatible = "qcom,camera";
-		reg = <0x2>;
+		reg = <0x02>;
 		qcom,csiphy-sd-index = <2>;
 		qcom,csid-sd-index = <2>;
 		qcom,mount-angle = <270>;
@@ -306,6 +311,8 @@
 		cam_vdig-supply = <&pm8994_l27>;
 		cam_vio-supply = <&pm8994_lvs1>;
 		cam_vana-supply = <&pm8994_l17>;
+		qcom,vdd-cx-supply = <&pm8994_s1_corner>;
+		qcom,vdd-cx-name = "qcom,vdd-cx";
 		qcom,cam-vreg-name = "cam_vdig", "cam_vio", "cam_vana";
 		qcom,cam-vreg-min-voltage = <1200000 0 2800000>;
 		qcom,cam-vreg-max-voltage = <1200000 0 2800000>;
@@ -331,7 +338,6 @@
 		clocks = <&clock_mmss clk_mclk2_clk_src>,
 			<&clock_mmss clk_camss_mclk2_clk>;
 		clock-names = "cam_src_clk", "cam_clk";
-		qcom,clock-rates = <24000000 0>;
 	};
 #endif
 };
