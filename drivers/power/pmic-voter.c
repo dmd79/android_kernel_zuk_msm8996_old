@@ -156,7 +156,7 @@ int vote(struct votable *votable, int client_id, bool state, int val)
 
 	if (votable->votes[client_id].state == state &&
 				votable->votes[client_id].value == val) {
-		pr_info("%s: votes unchanged; skipping\n", votable->name);
+		pr_debug("%s: votes unchanged; skipping\n", votable->name);
 		goto out;
 	}
 

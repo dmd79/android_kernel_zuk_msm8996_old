@@ -597,7 +597,7 @@ enum hvdcp_voters {
 #ifdef SUPPORT_QPNP_NOISE_LOG
 static int smbchg_debug_mask = 0xFF;
 #else
-static int smbchg_debug_mask = 0xFE;
+static int smbchg_debug_mask = 0x0;
 #endif
 module_param_named(
 	debug_mask, smbchg_debug_mask, int, S_IRUSR | S_IWUSR
