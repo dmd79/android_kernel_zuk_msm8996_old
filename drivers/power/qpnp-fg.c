@@ -380,7 +380,7 @@ module_param_named(
 );
 #endif
 
-static int fg_debug_mask = 0xE4;
+static int fg_debug_mask = 0; //0xE4;
 module_param_named(
 	debug_mask, fg_debug_mask, int, S_IRUSR | S_IWUSR
 );
