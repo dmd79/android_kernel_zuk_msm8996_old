@@ -426,6 +426,14 @@ static int set_cpu_min_freq(const char *buf, const struct kernel_param *kp)
 
 		i_cpu_stats = &per_cpu(cpu_stats, cpu);
 
+		/* HACK HACK HACK to ignore AOSP BoostFramework. Use InputBoost instead! */
+		if (val == 1036800 && cpu >= 2) {
+			pr_debug("msm_perf: rejecting CPU%u min-freq %u!", cpu, val);
+			return 0;
+		} else {
+			pr_debug("msm_perf: not rejecting CPU%u min freq %u!", cpu, val);
+		}
+			
 		i_cpu_stats->min = val;
 		cpumask_set_cpu(cpu, limit_mask);
 
@@ -1597,7 +1605,7 @@ static int perf_adjust_notify(struct notifier_block *nb, unsigned long val,
 
 	pr_debug("msm_perf: CPU%u policy before: %u:%u kHz\n", cpu,
 						policy->min, policy->max);
-	pr_debug("msm_perf: CPU%u seting min:max %u:%u kHz\n", cpu, min, max);
+	pr_debug("msm_perf: CPU%u setting min:max %u:%u kHz\n", cpu, min, max);
 
 	cpufreq_verify_within_limits(policy, min, max);
 
