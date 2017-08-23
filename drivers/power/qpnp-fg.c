@@ -380,7 +380,7 @@ module_param_named(
 );
 #endif
 
-static int fg_debug_mask = 0xE4;
+static int fg_debug_mask = 0; //0xE4;
 module_param_named(
 	debug_mask, fg_debug_mask, int, S_IRUSR | S_IWUSR
 );
@@ -2339,7 +2339,7 @@ static int soc_remap_process(struct fg_chip *chip, int soc)
 		else
 			maped_soc = soc;
 	}
-	pr_info("pre_map_soc is %d,post_map_soc is %d\n",soc,maped_soc);
+	pr_debug("pre_map_soc is %d,post_map_soc is %d\n",soc,maped_soc);
 	return maped_soc;
 }
 static int soc_show_op(struct fg_chip *chip, int msoc)
