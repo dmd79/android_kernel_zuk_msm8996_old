@@ -1234,8 +1234,9 @@ int mdss_debugfs_init(struct mdss_data_type *mdata)
 	}
 	mdss_debugfs_perf_init(mdd, mdata);
 
-	if (mdss_create_xlog_debug(mdd))
-		goto err;
+	//close xlog
+	//if (mdss_create_xlog_debug(mdd))
+	//	goto err;
 
 	mdata->debug_inf.debug_data = mdd;
 
