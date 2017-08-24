@@ -456,7 +456,6 @@ enum msm_vfe_reg_cfg_type {
 	VFE_HW_UPDATE_UNLOCK,
 	SET_WM_UB_SIZE,
 	SET_UB_POLICY,
-	GET_VFE_HW_LIMIT,
 };
 
 struct msm_vfe_cfg_cmd2 {
