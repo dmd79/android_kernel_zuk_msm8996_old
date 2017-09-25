@@ -84,7 +84,7 @@
 #define GTP_HAVE_STYLUS_KEY   0 //
 
 #define GTP_POWER_CTRL_SLEEP  1	// turn off power on suspend
-#define GTP_ICS_SLOT_REPORT   0
+#define GTP_ICS_SLOT_REPORT   1 // slot protocol
 #define GTP_CREATE_WR_NODE    1	// create the interface to support gtp_tools
 
 #define GTP_PROXIMITY         0	// proximity module (function as the p-sensor)

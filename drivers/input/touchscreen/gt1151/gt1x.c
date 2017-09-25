@@ -509,7 +509,7 @@ static s8 gt1x_request_input_dev(void)
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(3, 7, 0))
     input_mt_init_slots(input_dev, 16, INPUT_MT_DIRECT);
 #else
-    input_mt_init_slots(input_dev, 16); 
+    input_mt_init_slots(input_dev, 16, 0); 
 #endif
 #else
 	input_dev->keybit[BIT_WORD(BTN_TOUCH)] = BIT_MASK(BTN_TOUCH);
