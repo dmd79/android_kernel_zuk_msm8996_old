@@ -168,7 +168,11 @@
 				compatible = "android,fstab";
 				 system {
 					compatible = "android,system";
+#if defined CONFIG_PRODUCT_Z2_ROW
+					dev = "/dev/block/platform/soc/624000.ufshc/by-name/system";
+#else
 					dev = "/dev/block/platform/soc/7464900.sdhci/by-name/system";
+#endif
 					type = "ext4";
 					mnt_flags = "ro,barrier=1,discard";
 					fsmgr_flags = "wait";
