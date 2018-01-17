@@ -1,8 +1,7 @@
 #include "batterydata-z2_row-3000mah.dtsi"
-
+#include "z2_row-camera-sensor-mtp.dtsi"
 #include "common.dtsi"
 #include "dsi-panel-samsung-1080p-cmd.dtsi"
-#include "z2_row-camera-sensor.dtsi"
 
 / {
 	aliases {

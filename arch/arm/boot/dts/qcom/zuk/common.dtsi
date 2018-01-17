@@ -1,4 +1,3 @@
-#include "common-camera-sensor.dtsi"
 #include "common-charger.dtsi"
 #include "common-fingerprint.dtsi"
 #include "common-led.dtsi"

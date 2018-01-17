@@ -1,8 +1,7 @@
 #include "batterydata-z2_plus-3500mah.dtsi"
-
+#include "z2_plus-camera-sensor-mtp.dtsi"
 #include "common.dtsi"
 #include "dsi-panel-tianma-1080p-video.dtsi"
-#include "z2_plus-camera-sensor.dtsi"
 
 &dsi_tianma_otm1901a_vid {
 	qcom,mdss-dsi-bl-pmic-control-type = "bl_ctrl_pwm";
